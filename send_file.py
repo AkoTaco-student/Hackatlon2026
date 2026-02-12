@@ -4,12 +4,15 @@ import base64
 import sys
 import os
 
-BROKER = "192.168.1.15"
+BROKER = os.environ.get("BROKER_HOST") or (sys.argv[1] if len(sys.argv) > 1 else "HackatlonServer")
 PORT = 8883
 
-CA_CERT = r"C:\Users\Akos\Downloads\akos_certs\certs\ca_dir\ec_ca_cert.pem"
-CLIENT_CERT = r"C:\Users\Akos\Downloads\akos_certs\certs\ec_client_cert.pem"
-CLIENT_KEY = r"C:\Users\Akos\Downloads\akos_certs\certs\ec_client_private.pem"
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+CA_CERT = os.path.join(BASE_DIR, "certs", "ca_dir", "ec_ca_cert.pem")
+CLIENT_CERT = os.path.join(BASE_DIR, "certs", "client", "ec_client_cert.pem")
+CLIENT_KEY = os.path.join(BASE_DIR, "certs", "client", "ec_client_private.pem")
 
 TOPIC = "secure/files"
 

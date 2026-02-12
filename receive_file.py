@@ -13,11 +13,6 @@ PORT = 8883
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 
-CA_CERT = os.path.join(os.path.dirname(__file__), "certs", "ec_ca_cert.pem")
-CLIENT_CERT = os.path.join(os.path.dirname(__file__), "certs", "ec_client_cert.pem")
-CLIENT_KEY = os.path.join(os.path.dirname(__file__), "certs", "ec_client_private.pem")
-
-
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 CA_CERT = os.path.join(BASE_DIR, "certs", "ca_dir", "ec_ca_cert.pem")
