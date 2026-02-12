@@ -1,2 +1,15 @@
 # Hackatlon2026
-CacheMeIfYouCan
+
+
+# CacheMeIfYouCan
+
+
+
+To use the code: 
+
+
+download openssl
+download mosquitto
+download python
+
+
