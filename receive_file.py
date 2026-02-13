@@ -7,6 +7,10 @@ import os
 # Default broker name — can be a LAN hostname or IP. Use env `BROKER_HOST` or
 # pass as first CLI argument to override.
 BROKER = os.environ.get("BROKER_HOST") or (sys.argv[1] if len(sys.argv) > 1 else "HackatlonServer")
+#BROKER = os.environ.get("BROKER_HOST" ) or ("10.24.69.169" if len(sys.argv) > 1 else "HackatlonServer")
+BROKER_HOST = "127.0.0.1"
+#client.tls_insecure_set(False)
+
 PORT = 8883
 
 

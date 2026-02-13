@@ -5,6 +5,7 @@ import sys
 import os
 
 BROKER = os.environ.get("BROKER_HOST") or (sys.argv[1] if len(sys.argv) > 1 else "HackatlonServer")
+BROKER_HOST = os.environ.get("BROKER_HOST", "HackatlonServer")
 PORT = 8883
 
 
