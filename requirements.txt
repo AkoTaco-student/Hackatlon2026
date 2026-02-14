@@ -15,4 +15,4 @@ json
 paho-mqtt
 ssl
 base64
-
+langchain langchain-community chromadb sentence-transformers pypdf
