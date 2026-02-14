@@ -15,9 +15,12 @@ download python
 ## Realtime Avatar (interface/)
 
 1. Set environment variables:
-   - `HEYGEN_API_KEY`
-   - `HEYGEN_AVATAR_ID`
-   - `HEYGEN_VOICE_ID` (optional)
+   - `LIVEAVATAR_API_KEY`
+   - `LIVEAVATAR_AVATAR_ID`
+   - `LIVEAVATAR_VOICE_ID`
+   - `LIVEAVATAR_CONTEXT_ID` (optional)
+   - `LIVEAVATAR_MODE` (FULL or LITE)
+   - `LIVEAVATAR_LANGUAGE`
 2. Start Ollama: `ollama serve`
 3. Start the UI: `python interface/app.py`
 4. Open `http://localhost:5000`
