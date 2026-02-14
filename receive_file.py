@@ -25,7 +25,8 @@ CLIENT_KEY = os.path.join(BASE_DIR, "certs", "client", "ec_client_private.pem")
 
 
 
-TOPIC = "secure/files"
+#TOPIC = "secure/files"
+TOPIC = "secure/files/response"
 
 
 def on_message(client, userdata, msg):
