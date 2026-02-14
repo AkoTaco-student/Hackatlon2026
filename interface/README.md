@@ -41,10 +41,13 @@ Du kan angi disse før kjøring:
 ```powershell
 $env:OLLAMA_API = "http://localhost:11434"  # Ollama API URL
 $env:MODEL_NAME = "llama3"                   # Modellnavn (default: llama2)
-$env:HEYGEN_API_KEY = "your_heygen_api_key"  # HeyGen API key
-$env:HEYGEN_AVATAR_ID = "your_avatar_id"     # HeyGen avatar id
-$env:HEYGEN_VOICE_ID = "your_voice_id"       # (valgfritt) voice id
-$env:D_ID_API_KEY = "optional"               # (valgfritt) fallback
+$env:LIVEAVATAR_API_KEY = "your_liveavatar_api_key"  # LiveAvatar API key
+$env:LIVEAVATAR_AVATAR_ID = "your_avatar_id"         # LiveAvatar avatar id
+$env:LIVEAVATAR_VOICE_ID = "your_voice_id"           # Voice id
+$env:LIVEAVATAR_CONTEXT_ID = "optional"              # (valgfritt) context id
+$env:LIVEAVATAR_MODE = "FULL"                        # FULL eller LITE
+$env:LIVEAVATAR_LANGUAGE = "no"                      # Språk
+$env:LIVEAVATAR_SANDBOX = "false"                    # true for sandbox
 
 
 python app.py
@@ -71,14 +74,14 @@ python app.py
 - `POST /api/chat/stream` - Stream svar med SSE
 - `GET /api/models` - Liste over tilgjengelige modeller
 - `GET /health` - Helsesjekk
-- `POST /api/heygen/token` - Hent HeyGen token (brukes av frontend)
+- `POST /api/liveavatar/token` - Hent LiveAvatar session token (brukes av frontend)
 
 ## Filer
 
 - `index.html` - Chat-grensesnitt
 - `styles.css` - Styling
 - `chat.js` - Frontend JavaScript
-- `avatarStream.js` - HeyGen avatar streaming
+- `avatarStream.js` - LiveAvatar streaming
 - `avatar-test.html` - Enkel testside for avatar
 - `avatar-test.js` - Testlogikk
 - `app.py` - Flask backend

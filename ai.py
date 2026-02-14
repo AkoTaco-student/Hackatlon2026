@@ -1,4 +1,4 @@
-
+"""
 import paho.mqtt.client as mqtt
 import ssl
 import base64
@@ -74,9 +74,9 @@ client.subscribe(REQUEST_TOPIC)
 print("[AI] Waiting for files...")
 client.loop_forever()
 
-
-
 """
+
+
 
 
 #   pip install langchain langchain-community chromadb sentence-transformers pypdf
@@ -93,7 +93,9 @@ from langchain_community.llms import Ollama
 from langchain_community.document_loaders import TextLoader, PyPDFLoader
 from langchain_text_splitters import CharacterTextSplitter
 from langchain_community.vectorstores import Chroma
-from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain_huggingface import HuggingFaceEmbeddings
+
+
 
 # ---------------- MQTT CONFIG ----------------
 
@@ -113,7 +115,7 @@ RESPONSE_TOPIC = "secure/files/response"
 
 print("[AI] Loading RAG documents...")
 
-RAG_FOLDER = os.path.join(BASE_DIR, "RAG")
+RAG_FOLDER = os.path.join(BASE_DIR, "rag")
 
 documents = []
 
@@ -135,7 +137,10 @@ text_splitter = CharacterTextSplitter(chunk_size=500, chunk_overlap=50)
 texts = text_splitter.split_documents(documents)
 
 # Embeddings
-embeddings = HuggingFaceEmbeddings()
+#embeddings = HuggingFaceEmbeddings()
+embeddings = HuggingFaceEmbeddings(
+    model_name="sentence-transformers/all-mpnet-base-v2"
+)
 
 # Vector DB
 db = Chroma.from_documents(texts, embeddings)
@@ -161,7 +166,7 @@ def on_message(client, userdata, msg):
 
     prompt = f"""
 
-"""
+
 Svar på spørsmålet basert på kontekst.
 
 Kontekst:
@@ -170,6 +175,8 @@ Kontekst:
 Spørsmål:
 {query}
 """
+    
+
 """
 
     print("[AI] Sending to Ollama...")
@@ -212,49 +219,3 @@ client.loop_forever()
 
 
 
-
-
-
-"""
-import numpy as np
-import nltk
-
-from transformers import pipeline
-
-nlp = pipeline("conversation", model= "distilberg-base-uncased")
-
-
-def chatbot(text):
-    # Implement your chatbot logic here
-    pass
-
-# Test the chatbot
-chatbot("Hello, how are you?")
-
-"""
-""" Server.py ?"""
-"""
-from flask import Flask, request
-
-app = Flask(__name__)
-
-@app.route('/ping', methods=['POST'])
-def ping_ai():
-    # This function will be called when the AI sends a ping
-    # You can use this opportunity to process data from another file
-    return 'Ping received!'
-
-if __name__ == '__main__':
-    app.run(debug=True)
-
-
-import requests
-
-def ping_server():
-    url = 'http://???'
-    response = requests.post(url)
-    if response.status_code == 200:
-        # Data processing code goes here
-        print('Ping received and processed!')
-    else:
-        print(f'Error: {response.status_code}')"""

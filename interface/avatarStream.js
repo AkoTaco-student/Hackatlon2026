@@ -1,14 +1,14 @@
-import StreamingAvatar, {
-  AvatarQuality,
-  StreamingEvents,
-  TaskType,
-} from "https://esm.sh/@heygen/streaming-avatar";
+import {
+  LiveAvatarSession,
+  SessionEvent,
+  AgentEventsEnum,
+} from "https://esm.sh/@heygen/liveavatar-web-sdk@0.0.10?bundle";
 
 export class AvatarStream {
   constructor(videoEl, statusEl) {
     this.videoEl = videoEl;
     this.statusEl = statusEl;
-    this.avatar = null;
+    this.session = null;
     this.sessionReady = false;
     this.pendingText = "";
     this.flushTimer = null;
@@ -32,14 +32,14 @@ export class AvatarStream {
   async init() {
     const config = await this.fetchConfig();
     if (config.provider === "none") {
-      this.setStatus("Missing HEYGEN_API_KEY");
+      this.setStatus("Missing LIVEAVATAR_API_KEY");
       return;
     }
-    if (config.provider !== "heygen") {
-      this.setStatus("D-ID fallback not configured");
+    if (config.provider !== "liveavatar") {
+      this.setStatus("LiveAvatar not configured");
       return;
     }
-    await this.start(config.heygen);
+    await this.start(config.liveavatar);
   }
 
   async fetchConfig() {
@@ -50,24 +50,30 @@ export class AvatarStream {
     return await resp.json();
   }
 
-  async start(heygenConfig = {}) {
-    if (this.avatar) {
+  async start(liveavatarConfig = {}) {
+    if (this.session) {
       return;
     }
 
     this.setStatus("Starting avatar...");
-    const tokenResp = await fetch("/api/heygen/token", { method: "POST" });
+    const tokenResp = await fetch("/api/liveavatar/token", { method: "POST" });
     if (!tokenResp.ok) {
       const data = await tokenResp.json().catch(() => ({}));
-      throw new Error(data.error || "Failed to get HeyGen token");
+      throw new Error(data.error || "Failed to get LiveAvatar token");
     }
-    const { token } = await tokenResp.json();
+    const { session_token: sessionToken } = await tokenResp.json();
+    if (!sessionToken) {
+      throw new Error("LiveAvatar session token missing");
+    }
 
-    this.avatar = new StreamingAvatar({ token });
+    this.session = new LiveAvatarSession(sessionToken, {
+      apiUrl: liveavatarConfig.api_url || undefined,
+      voiceChat: false,
+    });
 
-    this.avatar.on(StreamingEvents.STREAM_READY, (event) => {
-      const mediaStream = event.detail;
-      this.videoEl.srcObject = mediaStream;
+    this.session.on(SessionEvent.SESSION_STREAM_READY, () => {
+      this.session.attach(this.videoEl);
+      this.videoEl.muted = false;
       this.videoEl.play().catch(() => {});
       this.sessionReady = true;
       this.setStatus("Avatar live");
@@ -79,36 +85,37 @@ export class AvatarStream {
       }
     });
 
-    this.avatar.on(StreamingEvents.STREAM_DISCONNECTED, () => {
-      this.sessionReady = false;
-      this.setStatus("Avatar disconnected - reconnecting...");
-      this.scheduleReconnect(heygenConfig);
+    this.session.on(SessionEvent.SESSION_STATE_CHANGED, (state) => {
+      this.setStatus(`Session: ${state}`);
     });
 
-    this.avatar.on(StreamingEvents.AVATAR_START_TALKING, () => {
+    this.session.on(SessionEvent.SESSION_DISCONNECTED, () => {
+      this.sessionReady = false;
+      this.setStatus("Avatar disconnected - reconnecting...");
+      this.scheduleReconnect(liveavatarConfig);
+    });
+
+    this.session.on(AgentEventsEnum.AVATAR_SPEAK_STARTED, () => {
       if (typeof this.onStartTalking === "function") {
         this.onStartTalking();
       }
     });
 
-    this.avatar.on(StreamingEvents.AVATAR_STOP_TALKING, () => {
+    this.session.on(AgentEventsEnum.AVATAR_SPEAK_ENDED, () => {
       if (typeof this.onStopTalking === "function") {
         this.onStopTalking();
       }
     });
 
-    await this.avatar.createStartAvatar({
-      avatarName: heygenConfig.avatar_id || "default",
-      quality: AvatarQuality.High,
-      voice: heygenConfig.voice_id
-        ? {
-            voiceId: heygenConfig.voice_id,
-          }
-        : undefined,
-    });
+    try {
+      await this.session.start();
+    } catch (err) {
+      this.setStatus(`Start failed: ${err.message}`);
+      throw err;
+    }
   }
 
-  scheduleReconnect(heygenConfig) {
+  scheduleReconnect(liveavatarConfig) {
     if (this.reconnectAttempts > 3) {
       this.setStatus("Reconnect failed - restart avatar");
       return;
@@ -117,7 +124,7 @@ export class AvatarStream {
     this.reconnectAttempts += 1;
     setTimeout(() => {
       this.stop();
-      this.start(heygenConfig).catch((err) => {
+      this.start(liveavatarConfig).catch((err) => {
         this.setStatus(`Reconnect failed: ${err.message}`);
       });
     }, delay);
@@ -175,31 +182,28 @@ export class AvatarStream {
       this.pendingText = "";
       return;
     }
-    if (!this.avatar || !this.sessionReady) {
+    if (!this.session || !this.sessionReady) {
       this.setStatus("Avatar not ready yet");
       return;
     }
     this.pendingText = "";
     try {
-      await this.avatar.speak({
-        text,
-        task_type: TaskType.REPEAT,
-      });
+      await this.session.repeat(text);
     } catch (err) {
       this.setStatus(`Speak failed: ${err.message}`);
     }
   }
 
   async stop() {
-    if (!this.avatar) {
+    if (!this.session) {
       return;
     }
     try {
-      await this.avatar.stopAvatar();
+      await this.session.stop();
     } catch (err) {
       this.setStatus(`Stop failed: ${err.message}`);
     }
-    this.avatar = null;
+    this.session = null;
     this.sessionReady = false;
   }
 }

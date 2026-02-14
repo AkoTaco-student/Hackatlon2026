@@ -8,7 +8,6 @@ from flask_cors import CORS
 import requests
 import os
 import json
-import time
 
 app = Flask(__name__)
 CORS(app)
@@ -17,18 +16,15 @@ CORS(app)
 OLLAMA_API = os.environ.get('OLLAMA_API', 'http://localhost:11434')
 MODEL_NAME = os.environ.get('MODEL_NAME', 'llama2')
 
-# HeyGen Streaming Avatar (preferred)
-HEYGEN_API_KEY = os.environ.get('HEYGEN_API_KEY')
-HEYGEN_AVATAR_ID = os.environ.get('HEYGEN_AVATAR_ID', '')
-HEYGEN_VOICE_ID = os.environ.get('HEYGEN_VOICE_ID', '')
-HEYGEN_BASE_URL = os.environ.get('HEYGEN_BASE_URL', 'https://api.heygen.com')
-
-# D-ID fallback (optional)
-D_ID_API_KEY = os.environ.get('D_ID_API_KEY')
-D_ID_AGENT_ID = os.environ.get('D_ID_AGENT_ID', '')
-
-# In-memory session token cache for HeyGen
-_HEYGEN_SESSION_TOKENS = {}
+# LiveAvatar (current)
+LIVEAVATAR_API_KEY = os.environ.get('LIVEAVATAR_API_KEY')
+LIVEAVATAR_AVATAR_ID = os.environ.get('LIVEAVATAR_AVATAR_ID', '')
+LIVEAVATAR_VOICE_ID = os.environ.get('LIVEAVATAR_VOICE_ID', '')
+LIVEAVATAR_CONTEXT_ID = os.environ.get('LIVEAVATAR_CONTEXT_ID', '')
+LIVEAVATAR_LANGUAGE = os.environ.get('LIVEAVATAR_LANGUAGE', 'no')
+LIVEAVATAR_MODE = os.environ.get('LIVEAVATAR_MODE', 'FULL')
+LIVEAVATAR_API_URL = os.environ.get('LIVEAVATAR_API_URL', 'https://api.liveavatar.com')
+LIVEAVATAR_SANDBOX = os.environ.get('LIVEAVATAR_SANDBOX', 'false').lower() in ['1', 'true', 'yes']
 
 
 @app.route('/')
@@ -177,164 +173,62 @@ def avatar_config():
     """
     Provide frontend config without exposing API keys
     """
-    provider = 'heygen' if HEYGEN_API_KEY else ('d-id' if D_ID_API_KEY else 'none')
+    provider = 'liveavatar' if LIVEAVATAR_API_KEY else 'none'
     return jsonify({
         'provider': provider,
-        'heygen': {
-            'avatar_id': HEYGEN_AVATAR_ID,
-            'voice_id': HEYGEN_VOICE_ID
-        },
-        'd_id': {
-            'agent_id': D_ID_AGENT_ID
+        'liveavatar': {
+            'avatar_id': LIVEAVATAR_AVATAR_ID,
+            'voice_id': LIVEAVATAR_VOICE_ID,
+            'context_id': LIVEAVATAR_CONTEXT_ID,
+            'language': LIVEAVATAR_LANGUAGE,
+            'mode': LIVEAVATAR_MODE,
+            'is_sandbox': LIVEAVATAR_SANDBOX,
+            'api_url': LIVEAVATAR_API_URL
         }
     })
 
+@app.route('/api/liveavatar/token', methods=['POST'])
+def liveavatar_token():
+    """
+    Create a LiveAvatar session token
+    """
+    if not LIVEAVATAR_API_KEY:
+        return jsonify({'error': 'LIVEAVATAR_API_KEY is not set'}), 400
+    if not LIVEAVATAR_AVATAR_ID:
+        return jsonify({'error': 'LIVEAVATAR_AVATAR_ID is not set'}), 400
+    if not LIVEAVATAR_VOICE_ID:
+        return jsonify({'error': 'LIVEAVATAR_VOICE_ID is not set'}), 400
 
-def _heygen_create_token():
-    if not HEYGEN_API_KEY:
-        raise Exception('HEYGEN_API_KEY is not set')
+    payload = {
+        'mode': LIVEAVATAR_MODE,
+        'avatar_id': LIVEAVATAR_AVATAR_ID,
+        'avatar_persona': {
+            'voice_id': LIVEAVATAR_VOICE_ID,
+            'language': LIVEAVATAR_LANGUAGE
+        }
+    }
+    if LIVEAVATAR_CONTEXT_ID:
+        payload['avatar_persona']['context_id'] = LIVEAVATAR_CONTEXT_ID
+    if LIVEAVATAR_SANDBOX:
+        payload['is_sandbox'] = True
+
     resp = requests.post(
-        f'{HEYGEN_BASE_URL}/v1/streaming.create_token',
-        headers={'x-api-key': HEYGEN_API_KEY},
+        f'{LIVEAVATAR_API_URL}/v1/sessions/token',
+        headers={
+            'X-API-KEY': LIVEAVATAR_API_KEY,
+            'accept': 'application/json',
+            'content-type': 'application/json'
+        },
+        json=payload,
         timeout=30
     )
-    resp.raise_for_status()
+    if resp.status_code >= 400:
+        return jsonify({'error': resp.text}), resp.status_code
     data = resp.json()
-    token = data.get('data', {}).get('token') or data.get('token')
-    if not token:
-        raise Exception('Failed to obtain HeyGen token')
-    return token
-
-
-@app.route('/api/heygen/token', methods=['POST'])
-def heygen_token():
-    """
-    Return a short-lived HeyGen token for browser SDK usage
-    """
-    try:
-        token = _heygen_create_token()
-        return jsonify({'token': token})
-    except Exception as e:
-        return jsonify({'error': str(e)}), 400
-
-
-@app.route('/api/heygen/session', methods=['POST'])
-def heygen_session():
-    """
-    Create and start a HeyGen streaming session
-    """
-    if not HEYGEN_API_KEY:
-        return jsonify({'error': 'HEYGEN_API_KEY is not set'}), 400
-    body = request.json or {}
-    avatar_id = body.get('avatar_id') or HEYGEN_AVATAR_ID
-    if not avatar_id:
-        return jsonify({'error': 'HEYGEN_AVATAR_ID is not set'}), 400
-
-    token = _heygen_create_token()
-
-    new_resp = requests.post(
-        f'{HEYGEN_BASE_URL}/v1/streaming.new',
-        headers={
-            'Content-Type': 'application/json',
-            'Authorization': f'Bearer {token}'
-        },
-        json={
-            'version': 'v2',
-            'avatar_id': avatar_id,
-            'voice_id': HEYGEN_VOICE_ID or None
-        },
-        timeout=30
-    )
-    new_resp.raise_for_status()
-    session_info = new_resp.json()
-
-    start_resp = requests.post(
-        f'{HEYGEN_BASE_URL}/v1/streaming.start',
-        headers={
-            'Content-Type': 'application/json',
-            'Authorization': f'Bearer {token}'
-        },
-        json={
-            'session_id': session_info.get('session_id')
-        },
-        timeout=30
-    )
-    start_resp.raise_for_status()
-
-    session_id = session_info.get('session_id')
-    if session_id:
-        _HEYGEN_SESSION_TOKENS[session_id] = {
-            'token': token,
-            'created_at': time.time()
-        }
-
     return jsonify({
-        'session': session_info
+        'session_id': (data.get('data') or {}).get('session_id') or data.get('session_id'),
+        'session_token': (data.get('data') or {}).get('session_token') or data.get('session_token')
     })
-
-
-@app.route('/api/heygen/task', methods=['POST'])
-def heygen_task():
-    """
-    Send text to HeyGen avatar
-    """
-    body = request.json or {}
-    session_id = body.get('session_id')
-    text = (body.get('text') or '').strip()
-    task_type = body.get('task_type') or 'repeat'
-
-    if not session_id or not text:
-        return jsonify({'error': 'session_id and text are required'}), 400
-
-    session = _HEYGEN_SESSION_TOKENS.get(session_id)
-    if not session:
-        return jsonify({'error': 'Unknown or expired session'}), 400
-
-    token = session['token']
-    resp = requests.post(
-        f'{HEYGEN_BASE_URL}/v1/streaming.task',
-        headers={
-            'Content-Type': 'application/json',
-            'Authorization': f'Bearer {token}'
-        },
-        json={
-            'session_id': session_id,
-            'text': text,
-            'task_type': task_type
-        },
-        timeout=30
-    )
-    if resp.status_code >= 400:
-        return jsonify({'error': resp.text}), resp.status_code
-    return jsonify({'ok': True})
-
-
-@app.route('/api/heygen/stop', methods=['POST'])
-def heygen_stop():
-    body = request.json or {}
-    session_id = body.get('session_id')
-    if not session_id:
-        return jsonify({'error': 'session_id is required'}), 400
-
-    session = _HEYGEN_SESSION_TOKENS.get(session_id)
-    if not session:
-        return jsonify({'error': 'Unknown or expired session'}), 400
-
-    token = session['token']
-    resp = requests.post(
-        f'{HEYGEN_BASE_URL}/v1/streaming.stop',
-        headers={
-            'Content-Type': 'application/json',
-            'Authorization': f'Bearer {token}'
-        },
-        json={'session_id': session_id},
-        timeout=30
-    )
-    if resp.status_code >= 400:
-        return jsonify({'error': resp.text}), resp.status_code
-
-    _HEYGEN_SESSION_TOKENS.pop(session_id, None)
-    return jsonify({'ok': True})
 
 @app.route('/api/models', methods=['GET'])
 def get_models():
