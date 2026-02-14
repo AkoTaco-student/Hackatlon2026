@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="no">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Avatar Test</title>
+    <link rel="stylesheet" href="styles.css" />
+    <style>
+      body {
+        height: auto;
+        min-height: 100vh;
+      }
+
+      .test-card {
+        background: white;
+        border-radius: 12px;
+        padding: 20px;
+        margin-top: 16px;
+        box-shadow: 0 12px 30px rgba(0, 0, 0, 0.2);
+      }
+
+      .test-status {
+        font-weight: 700;
+        font-size: 16px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <div class="avatar-panel">
+        <div class="avatar-header">
+          <h2>Avatar Test</h2>
+          <p class="avatar-subtitle">Auto speak + playback check</p>
+        </div>
+        <div class="avatar-stage">
+          <video id="avatarVideo" autoplay playsinline muted></video>
+          <div class="avatar-overlay" id="avatarStatus">Initializing...</div>
+        </div>
+      </div>
+      <div class="test-card">
+        <p class="test-status" id="testStatus">Starting avatar...</p>
+        <p>
+          This page will start the avatar, send a short test phrase, and
+          display PASS when the avatar begins talking.
+        </p>
+      </div>
+    </div>
+
+    <script type="module" src="avatar-test.js"></script>
+  </body>
+</html>

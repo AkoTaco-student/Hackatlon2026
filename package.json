@@ -1,0 +1,7 @@
+{
+  "name": "hackatlon2026",
+  "private": true,
+  "scripts": {
+    "avatar:test": "node tools/avatar_test_runner.js"
+  }
+}

@@ -7,34 +7,53 @@
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
-    <div class="container">
-      <div class="chat-header">
-        <h1>🇳🇴 Høyre</h1>
-        <p class="model-info">Med mindre stat, frihet og ansvar</p>
-      </div>
-
-      <div class="chat-box" id="chatBox">
-        <div class="message ai-message">
-          <p>Hallo! Jeg representerer Høyre. Hva ønsker du å snakke om?</p>
+    <div class="app">
+      <div class="avatar-panel">
+        <div class="avatar-header">
+          <h2>Realtime Avatar</h2>
+          <p class="avatar-subtitle">HeyGen Streaming</p>
+        </div>
+        <div class="avatar-stage">
+          <video id="avatarVideo" autoplay playsinline muted></video>
+          <div class="avatar-overlay" id="avatarStatus">Avatar not started</div>
+        </div>
+        <div class="avatar-controls">
+          <button id="avatarStartBtn" class="avatar-btn">Start Avatar</button>
+          <button id="avatarStopBtn" class="avatar-btn secondary" disabled>
+            Stop Avatar
+          </button>
         </div>
       </div>
 
-      <div class="input-area">
-        <div class="input-container">
-          <input
-            type="text"
-            id="messageInput"
-            placeholder="Skriv din melding her..."
-            autocomplete="off"
-          />
-          <button id="sendBtn" class="send-btn">Send</button>
+      <div class="container">
+        <div class="chat-header">
+          <h1>🇳🇴 Høyre</h1>
+          <p class="model-info">Med mindre stat, frihet og ansvar</p>
         </div>
-        <div class="loading" id="loading" style="display: none">
-          <span></span><span></span><span></span>
+
+        <div class="chat-box" id="chatBox">
+          <div class="message ai-message">
+            <p>Hallo! Jeg representerer Høyre. Hva ønsker du å snakke om?</p>
+          </div>
+        </div>
+
+        <div class="input-area">
+          <div class="input-container">
+            <input
+              type="text"
+              id="messageInput"
+              placeholder="Skriv din melding her..."
+              autocomplete="off"
+            />
+            <button id="sendBtn" class="send-btn">Send</button>
+          </div>
+          <div class="loading" id="loading" style="display: none">
+            <span></span><span></span><span></span>
+          </div>
         </div>
       </div>
     </div>
 
-    <script src="chat.js"></script>
+    <script type="module" src="chat.js"></script>
   </body>
 </html>

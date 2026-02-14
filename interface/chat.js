@@ -1,9 +1,36 @@
+import { AvatarStream } from "./avatarStream.js";
+
 const chatBox = document.getElementById("chatBox");
 const messageInput = document.getElementById("messageInput");
 const sendBtn = document.getElementById("sendBtn");
 const loading = document.getElementById("loading");
 
-const API_URL = "http://localhost:5000/api/chat";
+const avatarVideo = document.getElementById("avatarVideo");
+const avatarStatus = document.getElementById("avatarStatus");
+const avatarStartBtn = document.getElementById("avatarStartBtn");
+const avatarStopBtn = document.getElementById("avatarStopBtn");
+
+const API_STREAM_URL = "/api/chat/stream";
+
+const avatarStream = new AvatarStream(avatarVideo, avatarStatus);
+
+avatarStartBtn.addEventListener("click", async () => {
+  avatarStartBtn.disabled = true;
+  try {
+    await avatarStream.init();
+    avatarStopBtn.disabled = false;
+  } catch (err) {
+    avatarStatus.textContent = err.message;
+    avatarStartBtn.disabled = false;
+  }
+});
+
+avatarStopBtn.addEventListener("click", async () => {
+  avatarStopBtn.disabled = true;
+  await avatarStream.stop();
+  avatarStatus.textContent = "Avatar stopped";
+  avatarStartBtn.disabled = false;
+});
 
 // Send message on button click
 sendBtn.addEventListener("click", sendMessage);
@@ -21,33 +48,57 @@ async function sendMessage() {
 
   if (!message) return;
 
-  // Add user message to chat
   addMessageToChat(message, "user");
   messageInput.value = "";
   sendBtn.disabled = true;
   loading.style.display = "flex";
 
+  const aiMessage = addMessageToChat("", "ai");
+  let fullText = "";
+
   try {
-    const response = await fetch(API_URL, {
+    const response = await fetch(API_STREAM_URL, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ message: message }),
+      body: JSON.stringify({ message }),
     });
 
-    if (!response.ok) {
+    if (!response.ok || !response.body) {
       throw new Error("Network response was not ok");
     }
 
-    const data = await response.json();
-    addMessageToChat(data.response, "ai");
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder("utf-8");
+    let buffer = "";
+
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+
+      let parts = buffer.split("\n\n");
+      buffer = parts.pop() || "";
+
+      for (const part of parts) {
+        const line = part.split("\n").find((l) => l.startsWith("data: "));
+        if (!line) continue;
+        const payload = JSON.parse(line.replace("data: ", ""));
+        if (payload.type === "chunk") {
+          fullText += payload.text;
+          aiMessage.textContent = fullText;
+          chatBox.scrollTop = chatBox.scrollHeight;
+          avatarStream.speak(payload.text);
+        } else if (payload.type === "error") {
+          throw new Error(payload.error);
+        }
+      }
+    }
   } catch (error) {
     console.error("Error:", error);
-    addMessageToChat(
-      "Beklager, jeg kunne ikke kontakte serveren. Er Ollama kjørende?",
-      "ai",
-    );
+    aiMessage.textContent =
+      "Beklager, jeg kunne ikke kontakte serveren. Er Ollama kjørende?";
   } finally {
     sendBtn.disabled = false;
     loading.style.display = "none";
@@ -65,6 +116,6 @@ function addMessageToChat(message, sender) {
   messageDiv.appendChild(p);
   chatBox.appendChild(messageDiv);
 
-  // Scroll to bottom
   chatBox.scrollTop = chatBox.scrollHeight;
+  return p;
 }
