@@ -36,10 +36,10 @@ def on_message(client, userdata, msg):
 
     file_data = base64.b64decode(encoded)
 
-    with open("received_" + filename, "wb") as f:
+    with open("responce_" + filename, "wb") as f:
         f.write(file_data)
 
-    print(f"[RECEIVER] Saved as received_{filename}")
+    print(f"[RECEIVER] Saved as responce_{filename}")
 
 
 client = mqtt.Client()
@@ -76,7 +76,17 @@ except Exception as e:
     print(f"[RECEIVER] Could not connect to broker {BROKER}:{PORT} - {e}")
     sys.exit(1)
 
-client.subscribe(TOPIC)
+def on_connect(client, userdata, flags, rc):
+    if rc == 0:
+        print("[RECEIVER] Connected successfully")
+        client.subscribe(TOPIC)
+    else:
+        print("[RECEIVER] Connection failed:", rc)
+
+client.on_connect = on_connect
+
+#client.subscribe(TOPIC)
+#client.subscribe("secure/files/response")
 
 print("[RECEIVER] Waiting for files...")
 try:
