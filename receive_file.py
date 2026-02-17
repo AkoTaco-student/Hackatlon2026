@@ -7,8 +7,8 @@ import os
 # Default broker name — can be a LAN hostname or IP. Use env `BROKER_HOST` or
 # pass as first CLI argument to override.
 BROKER = os.environ.get("BROKER_HOST") or (sys.argv[1] if len(sys.argv) > 1 else "HackatlonServer")
-#BROKER = os.environ.get("BROKER_HOST" ) or ("10.24.69.169" if len(sys.argv) > 1 else "HackatlonServer")
-BROKER_HOST = "127.0.0.1"
+
+BROKER_HOST = "172.20.10.6"
 #client.tls_insecure_set(False)
 
 PORT = 8883
@@ -25,7 +25,8 @@ CLIENT_KEY = os.path.join(BASE_DIR, "certs", "client", "ec_client_private.pem")
 
 
 
-TOPIC = "secure/files"
+#TOPIC = "secure/files"
+TOPIC = "secure/files/response"
 
 
 def on_message(client, userdata, msg):
@@ -35,10 +36,10 @@ def on_message(client, userdata, msg):
 
     file_data = base64.b64decode(encoded)
 
-    with open("received_" + filename, "wb") as f:
+    with open("responce_" + filename, "wb") as f:
         f.write(file_data)
 
-    print(f"[RECEIVER] Saved as received_{filename}")
+    print(f"[RECEIVER] Saved as responce_{filename}")
 
 
 client = mqtt.Client()
@@ -75,7 +76,17 @@ except Exception as e:
     print(f"[RECEIVER] Could not connect to broker {BROKER}:{PORT} - {e}")
     sys.exit(1)
 
-client.subscribe(TOPIC)
+def on_connect(client, userdata, flags, rc):
+    if rc == 0:
+        print("[RECEIVER] Connected successfully")
+        client.subscribe(TOPIC)
+    else:
+        print("[RECEIVER] Connection failed:", rc)
+
+client.on_connect = on_connect
+
+#client.subscribe(TOPIC)
+#client.subscribe("secure/files/response")
 
 print("[RECEIVER] Waiting for files...")
 try:

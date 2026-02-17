@@ -15,8 +15,8 @@ CA_CERT = os.path.join(BASE_DIR, "certs", "ca_dir", "ec_ca_cert.pem")
 CLIENT_CERT = os.path.join(BASE_DIR, "certs", "client", "ec_client_cert.pem")
 CLIENT_KEY = os.path.join(BASE_DIR, "certs", "client", "ec_client_private.pem")
 
-TOPIC = "secure/files"
-
+#TOPIC = "secure/files"
+TOPIC = "secure/files/request"
 
 def send_file(filename):
     client = mqtt.Client()
@@ -46,5 +46,5 @@ def send_file(filename):
 
 
 if __name__ == "__main__":
-    send_file(sys.argv[1]) # Example only
-    #send_file(r"C:\Users\Akos\Documents\myfile.txt") --- We are gonna use this
+    #send_file(sys.argv[1]) # Example only
+    send_file(r"C:\Hackatlon2026\testing.txt")
