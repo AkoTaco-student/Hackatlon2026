@@ -20,3 +20,4 @@ ollama
 transformers
 huggingface-hub
 torch
+huggingface-hub<1.0.0

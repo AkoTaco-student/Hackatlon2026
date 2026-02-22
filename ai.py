@@ -1,4 +1,6 @@
 # pip install langchain langchain-community chromadb sentence-transformers pypdf langchain-huggingface paho-mqtt
+# Written by: 
+__author__ = "Cache Me if You Can"
 
 import paho.mqtt.client as mqtt
 import ssl
@@ -15,6 +17,7 @@ from langchain_huggingface import HuggingFaceEmbeddings
 # ---------------- MQTT CONFIG ----------------
 
 BROKER = "HackatlonServer"
+#BROKER = "127.0.0.1"
 PORT = 8883
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -98,8 +101,14 @@ def on_message(client, userdata, msg):
     print("[AI] Query received")
 
     try:
-        # Format: filename::client_id::base64data
-        filename, client_id, encoded = msg.payload.decode().split("::")
+        parts = msg.payload.decode().split("::")
+
+        # filename::client_id::request_id::base64data
+        if len(parts) != 4:
+            print("[AI ERROR] Invalid payload format:", parts)
+            return
+
+        filename, client_id, request_id, encoded = parts
 
         file_data = base64.b64decode(encoded)
         query = file_data.decode(errors="ignore")
@@ -109,46 +118,48 @@ def on_message(client, userdata, msg):
 
         context = "\n".join([doc.page_content for doc in docs])
         prompt = f"""
-Svar kort og presist.
+            Svar kort og presist.
 
-Kontekst:
-{context[:1500]}
+            Kontekst:
+            {context[:1500]}
 
-Spørsmål:
-{query}
+            Spørsmål:
+            {query}
+            """
 
-"""
-        
         print("[AI] Sending to LLM...")
         result = llm.invoke(prompt)
 
         response_filename = "ai_response_" + filename
 
-# ✅ Save response locally (plain text)
+
         with open(response_filename, "w", encoding="utf-8") as f:
             f.write(result)
 
         print(f"[AI] Response saved locally as: {response_filename}")
 
-# Encode for MQTT transmission
+
         encoded_response = base64.b64encode(
             result.encode("utf-8")
         ).decode("utf-8")
 
-        payload = response_filename + "::" + encoded_response
+
+        payload = f"{request_id}::{response_filename}::{encoded_response}"
 
         response_topic = f"secure/files/response/{client_id}"
         client.publish(response_topic, payload)
 
         print("[AI] Response sent!")
         print(f"[AI] Topic: {response_topic}")
+
     except Exception as e:
         print("[AI ERROR]", e)
 
 
 # ---------------- MQTT CLIENT ----------------
 
-client = mqtt.Client()
+client = mqtt.Client(protocol=mqtt.MQTTv311)
+
 
 client.tls_set(
     ca_certs=CA_CERT,

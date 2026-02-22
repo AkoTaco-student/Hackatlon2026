@@ -10,7 +10,7 @@ const avatarStatus = document.getElementById("avatarStatus");
 const avatarStartBtn = document.getElementById("avatarStartBtn");
 const avatarStopBtn = document.getElementById("avatarStopBtn");
 
-const API_STREAM_URL = "/api/chat/stream";
+const API_STREAM_URL = "/api/chat";
 
 const avatarStream = new AvatarStream(avatarVideo, avatarStatus);
 
