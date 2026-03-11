@@ -82,7 +82,7 @@ llm = Ollama(
     model="llama3",
     temperature=0.2,
     num_predict=300
-)
+)   
 
 print("[AI] RAG system ready!")
 

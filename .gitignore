@@ -11,20 +11,20 @@ venv/
 .env/
 
 # ===== TLS / Certificates =====
-*.key
-*.pem
-*.crt
-*.csr
-*.pfx
-*.der
+#*.key
+#*.pem
+#*.crt
+#*.csr
+#*.pfx
+#*.der
 
 # ===== Mosquitto =====
-mosquitto.db
-mosquitto.log
+#mosquitto.db
+#mosquitto.log
 
 # ===== OS Files =====
 .DS_Store
 Thumbs.db
 
 
-certs/
+#certs/

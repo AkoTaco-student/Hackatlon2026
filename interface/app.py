@@ -188,7 +188,7 @@ def liveavatar_token():
             'content-type': 'application/json'
         },
         json=payload,
-        timeout=45
+        timeout=240
     )
     if resp.status_code >= 400:
         return jsonify({'error': resp.text}), resp.status_code
