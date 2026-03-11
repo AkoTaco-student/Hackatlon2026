@@ -2,20 +2,49 @@
 Flask backend for AI Chat interface
 Connects to Ollama LLM service
 """
+import uuid
 
-from flask import Flask, request, jsonify, Response, send_from_directory, stream_with_context
+from flask import Response, stream_with_context
+from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 import requests
 import os
 import json
 
+
+import sys
+import paho.mqtt.client as mqtt
+import ssl
+import base64
+import threading
+import socket
+
+import tempfile
+
+# ================= MQTT CONFIG =================
+BROKER = "HackatlonServer"
+#BROKER = "127.0.0.1"
+
+PORT = 8883
+
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+CA_CERT = os.path.join(BASE_DIR, "certs", "ca_dir", "ec_ca_cert.pem")
+CLIENT_CERT = os.path.join(BASE_DIR, "certs", "client", "ec_client_cert.pem")
+CLIENT_KEY = os.path.join(BASE_DIR, "certs", "client", "ec_client_private.pem")
+
+CLIENT_ID = f"flask_server_{socket.gethostname()}"
+REQUEST_TOPIC = "secure/files/request"
+RESPONSE_TOPIC = f"secure/files/response/{CLIENT_ID}"
+
+mqtt_client = None
+mqtt_response = {"data": None}
+mqtt_event = threading.Event()
+
 app = Flask(__name__)
 CORS(app)
 
-# Ollama API endpoint (default: localhost:11434)
-OLLAMA_API = os.environ.get('OLLAMA_API', 'http://localhost:11434')
-MODEL_NAME = os.environ.get('MODEL_NAME', 'llama2')
-
+pending_requests = {}
 # LiveAvatar (current)
 LIVEAVATAR_API_KEY = os.environ.get('LIVEAVATAR_API_KEY')
 LIVEAVATAR_AVATAR_ID = os.environ.get('LIVEAVATAR_AVATAR_ID', '')
@@ -36,136 +65,75 @@ def index():
 def static_files(path):
     return send_from_directory(os.path.dirname(__file__), path)
 
-@app.route('/api/chat', methods=['POST'])
+@app.route("/api/chat", methods=["POST"])
 def chat():
-    """
-    Handle chat messages and return AI responses
-    """
-    try:
-        data = request.json
-        user_message = data.get('message', '').strip()
-        
-        if not user_message:
-            return jsonify({'error': 'Empty message'}), 400
-        
-        # Call Ollama API
-        response = call_ollama(user_message)
-        
-        return jsonify({
-            'response': response,
-            'model': MODEL_NAME
-        })
-    
-    except Exception as e:
-        print(f"Error: {e}")
-        return jsonify({'error': str(e)}), 500
 
-
-@app.route('/api/chat/stream', methods=['POST'])
-def chat_stream():
-    """
-    Stream chat responses from Ollama as SSE
-    """
-    data = request.json or {}
-    user_message = (data.get('message') or '').strip()
-    if not user_message:
-        return jsonify({'error': 'Empty message'}), 400
+    data = request.get_json()
+    user_message = data.get("message")
 
     def generate():
-        try:
-            for chunk in call_ollama_stream(user_message):
-                yield f"data: {json.dumps({'type': 'chunk', 'text': chunk})}\n\n"
-            yield f"data: {json.dumps({'type': 'done'})}\n\n"
-        except Exception as e:
-            yield f"data: {json.dumps({'type': 'error', 'error': str(e)})}\n\n"
+        
+        request_id = str(uuid.uuid4())
 
-    return Response(stream_with_context(generate()), mimetype='text/event-stream')
+        event = threading.Event()
+        response_holder = {"data": None}
+
+        pending_requests[request_id] = {
+            "event": event,
+            "response": response_holder}
+        
+
+        mqtt_event.clear()
+        mqtt_response["data"] = None
+
+        encoded = base64.b64encode(user_message.encode()).decode()
+        payload = f"prompt.txt::{CLIENT_ID}::{request_id}::{encoded}"
+
+        mqtt_client.publish(REQUEST_TOPIC, payload)
+        print("[MQTT] Prompt sent")
+
+        mqtt_event.wait(timeout=45)
+
+        ai_response = mqtt_response["data"]
+        if not event.wait(timeout=45):
+            yield f"data: {json.dumps({'type':'error','error':'Timeout'})}\n\n"
+            return
+
+        ai_response = response_holder["data"]
+        del pending_requests[request_id]
+
+
+        if not ai_response:
+            yield f"data: {json.dumps({'type':'error','error':'No response'})}\n\n"
+            return
+
+        words = ai_response.split(" ")
+
+        for word in words:
+            chunk = {"type": "chunk", "text": word + " "}
+            yield f"data: {json.dumps(chunk)}\n\n"
+
+        yield f"data: {json.dumps({'type':'done'})}\n\n"
+
+    return Response(
+        stream_with_context(generate()),
+        content_type="text/event-stream"
+    )
 
 def call_ollama(prompt):
-    """
-    Call Ollama API and get response from Høyre's perspective
-    """
-    try:
-        url = f'{OLLAMA_API}/api/generate'
-        
-        # System prompt to make AI respond from Høyre's perspective
-        system_prompt = """Du er en representant for Høyre, Norges klassisk konservative høyreparti. 
-Du argumenterer for:
-- Mindre stat og større frihet for enkeltindividet
-- Fritt marked og privat initiativ
-- Sterk kjernefamilie og kulturelle tradisjoner
-- Nasjonal selvbestemmelse og sikkerhet
-- Privat ansvar og gjensidig hjelp
-- Effektiv offentlig sektor
 
-Svar på norsk, vær høflig men selvsikker i dine standpunkter. Du representerer liberal-konservativ politikk."""
-        
-        full_prompt = f"{system_prompt}\n\nUser: {prompt}\n\nHøyre-representant:"
-        
-        payload = {
-            'model': MODEL_NAME,
-            'prompt': full_prompt,
-            'stream': False,
-            'temperature': 0.7
-        }
-        
-        print(f"[Ollama] Calling {url} with model: {MODEL_NAME}")
-        print(f"[User] {prompt}")
-        
-        response = requests.post(url, json=payload, timeout=300)
-        response.raise_for_status()
-        
-        result = response.json()
-        ai_response = result.get('response', 'No response from model').strip()
-        
-        print(f"[AI] {ai_response}")
-        
-        return ai_response
-    
-    except requests.exceptions.ConnectionError:
-        raise Exception(f"Cannot connect to Ollama at {OLLAMA_API}. Is it running?")
-    except requests.exceptions.Timeout:
-        raise Exception("Ollama request timed out. Try a simpler question.")
-    except Exception as e:
-        raise Exception(f"Ollama error: {str(e)}")
+    mqtt_event.clear()
+    mqtt_response["data"] = None
 
+    encoded = base64.b64encode(prompt.encode()).decode()
+    payload = f"prompt.txt::{CLIENT_ID}::{encoded}"
 
-def call_ollama_stream(prompt):
-    """
-    Call Ollama API with stream=True and yield text chunks
-    """
-    url = f'{OLLAMA_API}/api/generate'
-    system_prompt = """Du er en representant for Høyre, Norges klassisk konservative høyreparti. 
-Du argumenterer for:
-- Mindre stat og større frihet for enkeltindividet
-- Fritt marked og privat initiativ
-- Sterk kjernefamilie og kulturelle tradisjoner
-- Nasjonal selvbestemmelse og sikkerhet
-- Privat ansvar og gjensidig hjelp
-- Effektiv offentlig sektor
+    mqtt_client.publish(REQUEST_TOPIC, payload)
 
-Svar på norsk, vær høflig men selvsikker i dine standpunkter. Du representerer liberal-konservativ politikk."""
-    full_prompt = f"{system_prompt}\n\nUser: {prompt}\n\nHøyre-representant:"
+    print("[MQTT] Prompt sent")
 
-    payload = {
-        'model': MODEL_NAME,
-        'prompt': full_prompt,
-        'stream': True,
-        'temperature': 0.7
-    }
-
-    response = requests.post(url, json=payload, timeout=300, stream=True)
-    response.raise_for_status()
-
-    for line in response.iter_lines():
-        if not line:
-            continue
-        data = json.loads(line.decode('utf-8'))
-        if data.get('done'):
-            break
-        chunk = data.get('response', '')
-        if chunk:
-            yield chunk
+    mqtt_event.wait(timeout=45)
+    return mqtt_response["data"] or "No response received"
 
 
 @app.route('/api/avatar/config', methods=['GET'])
@@ -220,7 +188,7 @@ def liveavatar_token():
             'content-type': 'application/json'
         },
         json=payload,
-        timeout=30
+        timeout=240
     )
     if resp.status_code >= 400:
         return jsonify({'error': resp.text}), resp.status_code
@@ -229,54 +197,55 @@ def liveavatar_token():
         'session_id': (data.get('data') or {}).get('session_id') or data.get('session_id'),
         'session_token': (data.get('data') or {}).get('session_token') or data.get('session_token')
     })
-
-@app.route('/api/models', methods=['GET'])
-def get_models():
-    """
-    Get list of available Ollama models
-    """
-    try:
-        url = f'{OLLAMA_API}/api/tags'
-        response = requests.get(url, timeout=10)
-        response.raise_for_status()
-        
-        models = response.json().get('models', [])
-        return jsonify({'models': models})
     
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+def on_connect(client, userdata, flags, rc):
+    if rc == 0:
+        print("[MQTT] Connected")
+        client.subscribe(RESPONSE_TOPIC)
+        print(f"[MQTT] Subscribed to {RESPONSE_TOPIC}")
+    else:
+        print("[MQTT] Connection failed:", rc)
 
-@app.route('/health', methods=['GET'])
-def health():
-    """
-    Health check - verify Ollama connection
-    """
+def on_message(client, userdata, msg):
     try:
-        url = f'{OLLAMA_API}/api/tags'
-        response = requests.get(url, timeout=5)
-        response.raise_for_status()
-        
-        return jsonify({
-            'status': 'healthy',
-            'ollama': 'connected',
-            'model': MODEL_NAME
-        })
-    
+        parts = msg.payload.decode().split("::")
+
+        if len(parts) != 3:
+            print("[MQTT] Invalid response format:", parts)
+            return
+
+        request_id, filename, encoded = parts
+
+        decoded = base64.b64decode(encoded).decode(errors="ignore")
+
+        if request_id in pending_requests:
+            pending_requests[request_id]["response"]["data"] = decoded
+            pending_requests[request_id]["event"].set()
+
     except Exception as e:
-        return jsonify({
-            'status': 'unhealthy',
-            'ollama': 'disconnected',
-            'error': str(e)
-        }), 503
+        print("[MQTT] Error:", e)
+
+        
+def start_mqtt():
+    global mqtt_client
+
+    mqtt_client = mqtt.Client(client_id=CLIENT_ID)
+
+    mqtt_client.tls_set(
+        ca_certs=CA_CERT,
+        certfile=CLIENT_CERT,
+        keyfile=CLIENT_KEY,
+        tls_version=ssl.PROTOCOL_TLS_CLIENT
+    )
+
+    mqtt_client.on_connect = on_connect
+    mqtt_client.on_message = on_message
+
+    mqtt_client.connect(BROKER, PORT)
+    mqtt_client.loop_start()
 
 if __name__ == '__main__':
-    print(f"Starting Høyre AI Chat Interface...")
-    print(f"Ollama API: {OLLAMA_API}")
-    print(f"Model: {MODEL_NAME}")
-    print(f"Open http://localhost:5000 in your browser")
-    print(f"")
-    print(f"🇳🇴 Høyre - Med mindre stat, frihet og ansvar")
-    
+    start_mqtt()
     app.run(
         host='0.0.0.0',
         port=5000,
